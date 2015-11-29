@@ -45,20 +45,22 @@ from lightpaint import LightPaint
 
 # CONFIGURABLE STUFF -------------------------------------------------------
 
-num_leds   = 288 # Length of LED strip, in pixels
-pin_go     = 22  # GPIO pin numbers (Broadcom numbering) for 'go' button,
-pin_next   = 17  # previous image, next image and speed +/-.
+num_leds   = 288    # Length of LED strip, in pixels
+pin_go     = 22     # GPIO pin numbers (Broadcom numbering) for 'go' button,
+pin_next   = 17     # previous image, next image and speed +/-.
 pin_prev   =  4
 pin_faster = 23
 pin_slower = 24
+order      = 'brg'  # 'brg' for current DotStars, 'gbr' for pre-2015 strips
+vflip      = 'true' # 'true' if strip input at bottom, else 'false'
 
 # DotStar strip data & clock MUST connect to hardware SPI pins
 # (GPIO 10 & 11).  12000000 (12 MHz) is the SPI clock rate; this is the
 # fastest I could reliably operate a 288-pixel strip without glitching.
 # You can try faster, or may need to set it lower, no telling.
-# If using older (pre-2015) DotStar strips, add an extra argument
-# "order='gbr'" here for correct color order.
-strip = Adafruit_DotStar(num_leds, 12000000, order='gbr')
+# If using older (pre-2015) DotStar strips, declare "order='gbr'" above
+# for correct color order.
+strip = Adafruit_DotStar(num_leds, 12000000, order=order)
 
 path = "/media/usb" # USB stick mount point
 
@@ -171,7 +173,7 @@ def loadImage(index):
 	# Returns a LightPaint object which is used later for dithering
 	# and display.
 	lightpaint = LightPaint(pixels, img.size, gamma, color_balance,
-	  power_settings, order='gbr', vflip='true')
+	  power_settings, order=order, vflip=vflip)
 	print "\t%f seconds" % (time.time() - startTime)
 
 	# Success!
@@ -185,7 +187,24 @@ def loadImage(index):
 	strip.show()
 	return lightpaint
 
+def btn():
+	if not GPIO.input(pin_go):     return 1
+	if not GPIO.input(pin_faster): return 2
+	if not GPIO.input(pin_slower): return 3
+	if not GPIO.input(pin_next):   return 4
+	if not GPIO.input(pin_prev):   return 5
+	return 0
+
 # MAIN LOOP ----------------------------------------------------------------
+
+# Init some stuff for speed selection...
+max_time    = 10.0
+min_time    =  0.1
+time_range  = (max_time - min_time)
+speed_pixel = int(num_leds * (duration - min_time) / time_range)
+duration    = min_time + time_range * speed_pixel / (num_leds - 1)
+prev_btn    = 0
+rep_time    = 0.2
 
 scandir() # USB drive might already be inserted
 signal.signal(signal.SIGUSR1, sigusr1_handler) # USB mount signal
@@ -193,7 +212,8 @@ signal.signal(signal.SIGUSR2, sigusr2_handler) # USB unmount signal
 
 try:
 	while True:
-		if not GPIO.input(pin_go) and lightpaint != None:
+		b = btn()
+		if b == 1 and lightpaint != None:
 			# Paint!
 			startTime = time.time()
 			while True:
@@ -206,46 +226,53 @@ try:
 				# image to render.  Interpolation happens.
 				lightpaint.dither(ledBuf, elapsed / duration)
 				strip.show(ledBuf)
-			if GPIO.input(pin_go): # Button released?
+			if btn() != pin_go: # Button released?
 				strip.show(clearBuf)
-		elif not GPIO.input(pin_faster):
-			# Decrease paint duration (down to 0.1 sec minimum)
-			duration -= 0.1
-			if duration < 0.1: duration = 0.1
-			i = int((duration - 0.1) / 9.9 * (num_leds - 1))
-			print duration, i
-			strip.setPixelColor(i, 0x000080)
+		elif b == 2:
+			# Decrease paint duration
+			if speed_pixel > 0:
+				speed_pixel -= 1
+				duration = (min_time + time_range *
+				  speed_pixel / (num_leds - 1))
+			strip.setPixelColor(speed_pixel, 0x000080)
 			strip.show()
 			startTime = time.time()
-			while ((not GPIO.input(pin_faster)) and
-			       ((time.time() - startTime) < 0.12)): continue
+			while (btn() == 2 and ((time.time() - startTime) <
+			  rep_time)): continue
 			strip.clear()
 			strip.show()
-		elif not GPIO.input(pin_slower):
+		elif b == 3:
 			# Increase paint duration (up to 10 sec maximum)
-			duration += 0.1
-			if duration > 10.0: duration = 10.0
-			i = int((duration - 0.1) / 9.9 * (num_leds - 1))
-			print duration, i
-			strip.setPixelColor(i, 0x000080)
+			if speed_pixel < num_leds - 1:
+				speed_pixel += 1
+				duration = (min_time + time_range *
+				  speed_pixel / (num_leds - 1))
+			strip.setPixelColor(speed_pixel, 0x000080)
 			strip.show()
 			startTime = time.time()
-			while ((not GPIO.input(pin_slower)) and
-			       ((time.time() - startTime) < 0.12)): continue
+			while (btn() == 3 and ((time.time() - startTime) <
+			  rep_time)): continue
 			strip.clear()
 			strip.show()
-		elif not GPIO.input(pin_next) and filename != None:
+		elif b == 4 and filename != None:
 			# Next image (if USB drive present)
 			imgNum += 1
 			if imgNum >= len(filename): imgNum = 0
 			lightpaint = loadImage(imgNum)
-			while not GPIO.input(pin_next): continue
-		elif not GPIO.input(pin_prev) and filename != None:
+			while btn() == 4: continue
+		elif b == 5 and filename != None:
 			# Previous image (if USB drive present)
 			imgNum -= 1
 			if imgNum < 0: imgNum = len(filename) - 1
 			lightpaint = loadImage(imgNum)
-			while not GPIO.input(pin_prev): continue
+			while btn() == 5: continue
+		if b > 0 and b == prev_btn:
+			# If button held, accelerate speed selection
+			rep_time *= 0.92
+			if rep_time < 0.01: rep_time = 0.01
+		else:
+			rep_time = 0.2
+		prev_btn = b
 
 except KeyboardInterrupt:
 	print "Cleaning up"
