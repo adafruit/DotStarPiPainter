@@ -65,7 +65,8 @@ vflip      = 'true' # 'true' if strip input at bottom, else 'false'
 strip = Adafruit_DotStar(num_leds, 12000000, order=order)
 
 path      = '/media/usb'         # USB stick mount point
-eventfile = '/dev/input/event0'  # Mouse device (as positional encoder)
+mousefile = '/dev/input/mouse0'  # Mouse device (as positional encoder)
+eventfile = '/dev/input/event0'  # Mouse events accumulate here
 dev       = None                 # None unless mouse is detected
 
 gamma          = (2.8, 2.8, 2.8) # Gamma correction curves for R,G,B
@@ -93,7 +94,7 @@ filename   = None # List of image files (nothing loaded yet)
 lightpaint = None # LightPaint object for currently-active image (none yet)
 
 # If a mouse is plugged in, set up epoll for sensing position
-if os.path.exists(eventfile):
+if os.path.exists(mousefile):
 	dev = InputDevice(eventfile)
 	# Register mouse descriptor with epoll
 	epoll = select.epoll()
