@@ -36,12 +36,14 @@
 # --------------------------------------------------------------------------
 
 import os
+import select
 import signal
 import time
 import RPi.GPIO as GPIO
-from PIL import Image
 from dotstar import Adafruit_DotStar
+from evdev import InputDevice, ecodes
 from lightpaint import LightPaint
+from PIL import Image
 
 # CONFIGURABLE STUFF -------------------------------------------------------
 
@@ -62,11 +64,13 @@ vflip      = 'true' # 'true' if strip input at bottom, else 'false'
 # for correct color order.
 strip = Adafruit_DotStar(num_leds, 12000000, order=order)
 
-path = "/media/usb" # USB stick mount point
+path      = '/media/usb'         # USB stick mount point
+eventfile = '/dev/input/event0'  # Mouse device (as positional encoder)
+dev       = None                 # None unless mouse is detected
 
 gamma          = (2.8, 2.8, 2.8) # Gamma correction curves for R,G,B
 color_balance  = (128, 255, 180) # Max brightness for R,G,B (white balance)
-power_settings = (1750, 1900)    # Battery avg and peak current
+power_settings = (1450, 1550)    # Battery avg and peak current
 
 # INITIALIZATION -----------------------------------------------------------
 
@@ -87,6 +91,15 @@ imgNum     = 0    # Index of currently-active image
 duration   = 2.0  # Image paint time, in seconds
 filename   = None # List of image files (nothing loaded yet)
 lightpaint = None # LightPaint object for currently-active image (none yet)
+
+# If a mouse is plugged in, set up epoll for sensing position
+if os.path.exists(eventfile):
+	dev = InputDevice(eventfile)
+	# Register mouse descriptor with epoll
+	epoll = select.epoll()
+	epoll.register(dev.fileno(), select.EPOLLIN)
+	print 'Using mouse for positional input'
+
 
 # FUNCTIONS ----------------------------------------------------------------
 
@@ -215,19 +228,50 @@ try:
 		b = btn()
 		if b == 1 and lightpaint != None:
 			# Paint!
-			startTime = time.time()
-			while True:
-				t1        = time.time()
-				elapsed   = t1 - startTime
-				if elapsed > duration: break
-				# dither() function is passed a destination
-				# buffer and a float from 0.0 to 1.0
-				# indicating which column of the source
-				# image to render.  Interpolation happens.
-				lightpaint.dither(ledBuf, elapsed / duration)
-				strip.show(ledBuf)
+
+			if dev is None: # Time-based
+
+				startTime = time.time()
+				while True:
+					t1        = time.time()
+					elapsed   = t1 - startTime
+					if elapsed > duration: break
+					# dither() function is passed a
+					# destination buffer and a float
+					# from 0.0 to 1.0 indicating which
+					# column of the source image to
+					# render.  Interpolation happens.
+					lightpaint.dither(ledBuf,
+					  elapsed / duration)
+					strip.show(ledBuf)
+
+			else: # Encoder-based
+
+				mousepos = 0
+				scale    = 0.01 / (speed_pixel + 1)
+				while True:
+					input = epoll.poll(-1) # Non-blocking
+					for i in input: # For each pending...
+						try:
+							for event in dev.read():
+								if(event.type == ecodes.EV_REL and
+								   event.code == ecodes.REL_X):
+									mousepos += event.value
+						except:
+							# If this occurs, usually power settings
+							# are too high for battery source.
+							# Voltage sags, Pi loses track of USB device.
+							print 'LOST MOUSE CONNECTION'
+							continue
+
+					pos = abs(mousepos) * scale
+					if pos > 1.0: break
+					lightpaint.dither(ledBuf, pos)
+					strip.show(ledBuf)
+
 			if btn() != pin_go: # Button released?
 				strip.show(clearBuf)
+
 		elif b == 2:
 			# Decrease paint duration
 			if speed_pixel > 0:
@@ -277,5 +321,7 @@ try:
 except KeyboardInterrupt:
 	print "Cleaning up"
 	GPIO.cleanup()
+	strip.clear()
+	strip.show()
 	print "Done!"
 
