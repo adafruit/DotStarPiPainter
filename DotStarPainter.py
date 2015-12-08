@@ -47,7 +47,7 @@ from PIL import Image
 
 # CONFIGURABLE STUFF -------------------------------------------------------
 
-num_leds   = 288    # Length of LED strip, in pixels
+num_leds   = 144    # Length of LED strip, in pixels
 pin_go     = 22     # GPIO pin numbers (Broadcom numbering) for 'go' button,
 pin_next   = 17     # previous image, next image and speed +/-.
 pin_prev   =  4
