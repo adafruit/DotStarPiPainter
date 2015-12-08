@@ -3,4 +3,4 @@
 # See 99_lightpaint_mount for explanation.
 # This is the companion unmount script.
 # Move or copy this file to /etc/usbmount/umount.d
-usr/bin/pkill -SIGUSR2 -f DotStarPainter.py
+usr/bin/pkill -SIGUSR2 -f DotStarPiPainter.py

@@ -1,7 +1,7 @@
 /*------------------------------------------------------------------------
   Python/C module for Adafruit DotStar LED light painting on Raspberry Pi.
 
-  The main light painter application code (in the DotStarPainter.py file)
+  The main light painter application code (in the DotStarPiPainter.py file)
   is written in Python.  The Python Imaging Library (or its more recent
   derivative, Pillow) has excellent support for image file decoding,
   scaling, etc., so it's a natural for the "high level" aspects of light

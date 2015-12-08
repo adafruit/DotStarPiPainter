@@ -4,7 +4,7 @@
 # sudo apt-get install usbmount
 # Then move or copy this file to /etc/usbmount/mount.d
 
-# 'DotStarPainter.py' must be running in the background; it can be launched
+# 'DotStarPiPainter.py' must be running in the background; it can be launched
 # in the /etc/rc.local script.  When a USB stick is inserted, this issues
 # SIGUSR1 signal to that process:
-usr/bin/pkill -SIGUSR1 -f DotStarPainter.py
+usr/bin/pkill -SIGUSR1 -f DotStarPiPainter.py
