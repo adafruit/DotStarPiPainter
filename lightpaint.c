@@ -38,13 +38,13 @@ typedef struct {
 
 // CONSTRUCTOR: allocate a new LightPaint object for a given PIL Image and
 // Adafruit_DotStar strip.  Required arguments are: Python image pixel data
-// (using img.tostring()), pixel dimensions (img.size; w,h as tuple),
-// R,G,B gamma values (tuple, 3 floats), R,G,B max values (tuple, 3 bytes),
-// battery average and peak currents (milliamps).  The LED strip color order
-// can optionally be passed as a keyword argument, e.g. append "order='gbr'"
-// if using older DotStar pixels (BRG is default).  Optionally pass
-// "vflip='true'" to flip image vertically if input end of strip is at the
-// bottom rather than top.
+// (using img.tobytes() in current PIL, img.tostring() in older versions)),
+// pixel dimensions (img.size; w,h as tuple), R,G,B gamma values (tuple,
+// 3 floats), R,G,B max values (tuple, 3 bytes), battery average and peak
+// currents (milliamps).  The LED strip color order can optionally be passed
+// as a keyword argument, e.g. append "order='gbr'" if using older DotStar
+// pixels (BRG is default).  Optionally pass "vflip='true'" to flip image
+// vertically if input end of strip is at the bottom rather than top.
 static PyObject *LightPaint_new(
   PyTypeObject *type, PyObject *arg, PyObject *kw) {
         LightPaintObject *self = NULL;

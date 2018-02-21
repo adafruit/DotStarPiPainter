@@ -163,9 +163,14 @@ def loadImage(index):
 		img = img.resize((img.size[0], num_leds), Image.BICUBIC)
 		print "now %dx%d pixels" % img.size
 
-	# Convert raw RGB pixel data to a string buffer.
+	# Convert raw RGB pixel data to a bytes or string buffer.
 	# The C module can easily work with this format.
-	pixels = img.tostring()
+	try:
+		# Current/preferred PIL method
+		pixels = img.tobytes()
+	except:
+		# Oldschool PIL (deprecated)
+		pixels = img.tostring()
 	print "\t%f seconds" % (time.time() - startTime)
 
 	# Do external C processing on image; this provides 16-bit gamma
