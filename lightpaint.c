@@ -16,7 +16,7 @@
   from Adafruit!
   ------------------------------------------------------------------------*/
 
-#include <python2.7/Python.h>
+#include <python3.5/Python.h>
 
 // DotStar LED power estimates measured & divided from 100 pixels @ 5.1VDC.
 #define mA0  1.25 // LED current when off (driver logic still needs some)
@@ -54,9 +54,10 @@ static PyObject *LightPaint_new(
 	uint8_t           offset[]={2,3,1}, // R,G,B indexes (BRG default)
 	                  max[3];           // R,G,B max
 	double            gamma[3];         // R,G,B gamma
-	PyObject         *string;           // 'order' value as Python object
-	char             *order;            // 'order' value as C string
-	char             *vf;               // 'vflip' value as C string
+	PyObject         *string,           // 'order' value as Python object
+	                 *tmpbytes;         // For unicode conversion
+	char             *order = NULL,     // 'order' value as C string
+	                 *vf    = NULL;     // 'vflip' value as C string
         uint8_t           vFlip = 0;        // If set, input at strip bottom
 
 	// See comments above re: required arguments
@@ -72,21 +73,33 @@ static PyObject *LightPaint_new(
 		// strip).  Order string isn't much validated; nonsense
 		// and mayhem could potentially occur.
 		if((string = PyDict_GetItemString(kw, "order")) &&
-		   (order = PyString_AsString(string))) {
-			char *c, i;
-			for(i=0; order[i]; i++) order[i] = tolower(order[i]);
-			if((c = strchr(order, 'r'))) offset[0] = c - order + 1;
-			if((c = strchr(order, 'g'))) offset[1] = c - order + 1;
-			if((c = strchr(order, 'b'))) offset[2] = c - order + 1;
+		   (tmpbytes = PyUnicode_AsEncodedString(string,
+		    "UTF-8", "strict"))) {
+			if(order = PyBytes_AS_STRING(tmpbytes)) {
+				char *c, i;
+				for(i=0; order[i]; i++)
+					order[i] = tolower(order[i]);
+				if((c = strchr(order, 'r')))
+					offset[0] = c - order + 1;
+				if((c = strchr(order, 'g')))
+					offset[1] = c - order + 1;
+				if((c = strchr(order, 'b')))
+					offset[2] = c - order + 1;
+			}
+			Py_DECREF(tmpbytes);
 		}
 
 		// Use keyword 'vflip' to indicate whether input end is
 		// at top ("vflip='false'") or bottom ("vflip='true').
 		// Can also use 0/1 for false/true.
 		if((string = PyDict_GetItemString(kw, "vflip")) &&
-		   (vf = PyString_AsString(string))) {
-			vFlip = ((!strcasecmp(vf, "true")) ||
-			  !strcmp(vf, "1"));
+		   (tmpbytes = PyUnicode_AsEncodedString(string,
+		    "UTF-8", "strict"))) {
+			if(vf = PyBytes_AS_STRING(tmpbytes)) {
+				vFlip = ((!strcasecmp(vf, "true")) ||
+				  !strcmp(vf, "1"));
+			}
+			Py_DECREF(tmpbytes);
 		}
 	}
 
@@ -228,7 +241,7 @@ static PyObject *dither(LightPaintObject *self, PyObject *arg) {
 	// Left/right column weightings (1-256)
 	rWeight  = 1 + (int)((x - (double)lCol) * 256.0);
 	lWeight  = 257 - rWeight;
-	ledPtr   = ledBuf.buf;              // -> Output data
+	ledPtr   = ledBuf.buf + 4;              // -> Output data
 	leftPtr  = &self->pixels[lCol * 3]; // -> Left column input
 	rightPtr = &self->pixels[rCol * 3]; // -> Right column input
 	rowInc   = self->width * 3;
@@ -290,7 +303,7 @@ static void LightPaint_dealloc(LightPaintObject *self) {
 		free(self->tables);
 		PyBuffer_Release(&self->pixelBuf);
 	}
-	self->ob_type->tp_free((PyObject *)self);
+	Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
 static PyMethodDef methods[] = {
@@ -299,8 +312,7 @@ static PyMethodDef methods[] = {
 };
 
 static PyTypeObject LightPaintObjectType = {
-	PyObject_HEAD_INIT(NULL)
-	0,                              // ob_size (not used, always set to 0)
+	PyVarObject_HEAD_INIT(NULL, 0)
 	"lightpaint.LightPaint",        // tp_name (module name, object name)
 	sizeof(LightPaintObject),       // tp_basicsize
 	0,                              // tp_itemsize
@@ -341,13 +353,27 @@ static PyTypeObject LightPaintObjectType = {
 	0,                              // tp_free
 };
 
-PyMODINIT_FUNC initlightpaint(void) { // Module initialization function
+PyMODINIT_FUNC PyInit_lightpaint(void) { // Module initialization function
 	PyObject* m;
 
-	if((m = Py_InitModule("lightpaint", methods)) &&
+	static struct PyModuleDef moduledef = {
+	  PyModuleDef_HEAD_INIT,
+	  "lightpaint",  /* m_name */
+	  "Lightpaint",  /* m_doc */
+	  -1,            /* m_size */
+	  methods,       /* m_methods */
+	  NULL,          /* m_reload */
+	  NULL,          /* m_traverse */
+	  NULL,          /* m_clear */
+	  NULL,          /* m_free */
+	};
+
+	if((m = PyModule_Create(&moduledef)) &&
 	   (PyType_Ready(&LightPaintObjectType) >= 0)) {
 		Py_INCREF((void *)&LightPaintObjectType);
 		PyModule_AddObject(m, "LightPaint",
 		  (PyObject *)&LightPaintObjectType);
+		return m;
 	}
+	return NULL;
 }

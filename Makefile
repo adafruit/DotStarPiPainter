@@ -1,7 +1,7 @@
 # Makefile for compiling the lightpaint.so Python/C module.
 
 CC     = gcc
-CFLAGS = -fPIC -O3 -fomit-frame-pointer -funroll-loops
+CFLAGS = -fPIC -Ofast -fomit-frame-pointer -funroll-loops
 
 all: lightpaint.so
 
